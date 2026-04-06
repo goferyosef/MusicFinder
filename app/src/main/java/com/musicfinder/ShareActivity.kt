@@ -9,7 +9,7 @@ class ShareActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val text = intent?.getStringExtra(Intent.EXTRA_TEXT)
+        val text = intent?.getStringExtra(Intent.EXTRA_TEXT)?.take(10_000)
         if (text.isNullOrBlank()) {
             finish()
             return

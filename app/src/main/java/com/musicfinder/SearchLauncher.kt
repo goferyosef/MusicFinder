@@ -11,6 +11,7 @@ object SearchLauncher {
 
     fun searchOnYouTube(context: Context, query: String) {
         val url = "https://www.youtube.com/results?search_query=${Uri.encode(query)}"
+        require(url.startsWith("https://")) { "Only HTTPS URLs allowed" }
         val uri = Uri.parse(url)
 
         // Try Brave first (ad-free)
