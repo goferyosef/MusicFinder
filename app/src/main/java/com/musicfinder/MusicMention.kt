@@ -1,8 +1,11 @@
 package com.musicfinder
 
+enum class Confidence { HIGH, MEDIUM, LOW }
+
 data class MusicMention(
     val title: String,
     val artist: String? = null,
-    val context: String,       // surrounding sentence shown in the UI
-    val searchQuery: String    // pre-built query: "title artist" or just "title"
+    val context: String,
+    val searchQuery: String,
+    val confidence: Confidence = Confidence.MEDIUM
 )

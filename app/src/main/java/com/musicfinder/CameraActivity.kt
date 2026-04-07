@@ -102,12 +102,7 @@ class CameraActivity : AppCompatActivity() {
                         }
 
                         val mentions = MusicDetector.detect(recognizedText)
-                        ResultsBottomSheet.show(supportFragmentManager, mentions, rawText = recognizedText)
-                        supportFragmentManager.addFragmentOnAttachListener { _, fragment ->
-                            if (fragment is com.google.android.material.bottomsheet.BottomSheetDialogFragment) {
-                                fragment.dialog?.setOnDismissListener { resetCapture() }
-                            }
-                        }
+                        autoPlayOrShowSheet(mentions, recognizedText)
                     }
                     .addOnFailureListener { e ->
                         proxy.close()
@@ -129,6 +124,29 @@ class CameraActivity : AppCompatActivity() {
         binding.buttonCapture.isEnabled = true
         binding.progressBar.visibility = View.GONE
         binding.textOcrPreview.visibility = View.GONE
+    }
+
+    private fun autoPlayOrShowSheet(mentions: List<MusicMention>, rawText: String) {
+        val top = mentions.firstOrNull()
+
+        // Single HIGH-confidence match → launch instantly, reset camera after
+        if (mentions.size == 1 && top?.confidence == Confidence.HIGH) {
+            SearchLauncher.searchOnYouTube(this, top.searchQuery)
+            resetCapture()
+            return
+        }
+
+        // Multiple matches with a HIGH one on top → auto-launch best, show sheet for the rest
+        if (top?.confidence == Confidence.HIGH) {
+            SearchLauncher.searchOnYouTube(this, top.searchQuery)
+        }
+
+        ResultsBottomSheet.show(supportFragmentManager, mentions, rawText = rawText)
+        supportFragmentManager.addFragmentOnAttachListener { _, fragment ->
+            if (fragment is com.google.android.material.bottomsheet.BottomSheetDialogFragment) {
+                fragment.dialog?.setOnDismissListener { resetCapture() }
+            }
+        }
     }
 
     private fun showPermissionDeniedDialog() {
