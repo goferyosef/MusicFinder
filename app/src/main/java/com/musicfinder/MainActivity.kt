@@ -27,7 +27,8 @@ class MainActivity : AppCompatActivity() {
 
     /**
      * Publishes a sharing shortcut so MusicFinder appears in the Direct Share
-     * row at the top of the Android share sheet — above the regular app list.
+     * row at the very top of the Android share sheet.
+     * Rank 0 = highest priority. LongLived = survives app restarts.
      */
     private fun publishShareShortcut() {
         val shortcut = ShortcutInfoCompat.Builder(this, "musicfinder_share")
@@ -36,6 +37,7 @@ class MainActivity : AppCompatActivity() {
             .setIcon(IconCompat.createWithResource(this, R.drawable.ic_music_note))
             .setIntent(Intent(Intent.ACTION_DEFAULT, null, this, ShareActivity::class.java))
             .setCategories(setOf("com.musicfinder.SHARE_TARGET"))
+            .setRank(0)
             .setLongLived(true)
             .setPerson(
                 Person.Builder()

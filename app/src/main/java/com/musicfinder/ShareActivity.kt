@@ -16,31 +16,31 @@ class ShareActivity : AppCompatActivity() {
         }
 
         val mentions = MusicDetector.detect(text)
-        autoPlayOrShowSheet(mentions, text)
-    }
 
-    private fun autoPlayOrShowSheet(mentions: List<MusicMention>, rawText: String) {
-        val top = mentions.firstOrNull()
+        when {
+            // Nothing detected → search the raw text immediately, no UI
+            mentions.isEmpty() -> {
+                SearchLauncher.searchOnYouTube(this, text.take(200).trim())
+                finish()
+            }
 
-        // Single HIGH-confidence match → launch instantly, no UI shown
-        if (mentions.size == 1 && top?.confidence == Confidence.HIGH) {
-            SearchLauncher.searchOnYouTube(this, top.searchQuery)
-            finish()
-            return
-        }
+            // Single HIGH-confidence → launch instantly, no UI
+            mentions.size == 1 && mentions.first().confidence == Confidence.HIGH -> {
+                SearchLauncher.searchOnYouTube(this, mentions.first().searchQuery)
+                finish()
+            }
 
-        // Any HIGH-confidence match when multiple results → auto-launch the best one,
-        // but still show the sheet so the user can pick a different one if needed
-        if (top?.confidence == Confidence.HIGH) {
-            SearchLauncher.searchOnYouTube(this, top.searchQuery)
-            // Don't finish — show sheet for any remaining mentions
-        }
-
-        // LOW/MEDIUM or multiple → show bottom sheet
-        ResultsBottomSheet.show(supportFragmentManager, mentions, rawText = rawText)
-        supportFragmentManager.addFragmentOnAttachListener { _, fragment ->
-            if (fragment is com.google.android.material.bottomsheet.BottomSheetDialogFragment) {
-                fragment.dialog?.setOnDismissListener { finish() }
+            // Multiple or lower confidence → show sheet; also auto-launch top if HIGH
+            else -> {
+                if (mentions.first().confidence == Confidence.HIGH) {
+                    SearchLauncher.searchOnYouTube(this, mentions.first().searchQuery)
+                }
+                ResultsBottomSheet.show(supportFragmentManager, mentions, rawText = text)
+                supportFragmentManager.addFragmentOnAttachListener { _, fragment ->
+                    if (fragment is com.google.android.material.bottomsheet.BottomSheetDialogFragment) {
+                        fragment.dialog?.setOnDismissListener { finish() }
+                    }
+                }
             }
         }
     }

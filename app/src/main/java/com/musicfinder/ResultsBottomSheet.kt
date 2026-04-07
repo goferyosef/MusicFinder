@@ -21,18 +21,13 @@ class ResultsBottomSheet : BottomSheetDialogFragment() {
         private const val ARG_MENTIONS = "mentions"
         private const val ARG_RAW = "raw_text"
 
-        fun show(
-            manager: FragmentManager,
-            mentions: List<MusicMention>,
-            rawText: String
-        ) {
-            val sheet = ResultsBottomSheet().apply {
+        fun show(manager: FragmentManager, mentions: List<MusicMention>, rawText: String) {
+            ResultsBottomSheet().apply {
                 arguments = Bundle().apply {
                     putParcelableArrayList(ARG_MENTIONS, ArrayList(mentions.map { it.toParcelable() }))
                     putString(ARG_RAW, rawText)
                 }
-            }
-            sheet.show(manager, TAG)
+            }.show(manager, TAG)
         }
     }
 
@@ -48,30 +43,24 @@ class ResultsBottomSheet : BottomSheetDialogFragment() {
                 arguments?.getParcelableArrayList(ARG_MENTIONS, MusicMentionParcelable::class.java) ?: emptyList()
             else
                 arguments?.getParcelableArrayList(ARG_MENTIONS) ?: emptyList()
+
         val mentions = parcelables.map { it.toMusicMention() }
         val rawText = arguments?.getString(ARG_RAW) ?: ""
 
-        if (mentions.isEmpty()) {
-            binding.headerText.text = "No music mentions detected"
-            binding.recyclerView.visibility = View.GONE
-            binding.emptyHint.visibility = View.VISIBLE
-        } else {
-            binding.headerText.text = if (mentions.size == 1) "1 music mention found" else "${mentions.size} music mentions found"
-            binding.recyclerView.visibility = View.VISIBLE
-            binding.emptyHint.visibility = View.GONE
-            binding.recyclerView.layoutManager = LinearLayoutManager(requireContext())
-            binding.recyclerView.adapter = MentionsAdapter(mentions) { mention ->
-                SearchLauncher.searchOnYouTube(requireContext(), mention.searchQuery)
-                dismiss()
-            }
+        val count = mentions.size
+        binding.headerText.text = when (count) {
+            1 -> "1 music match found"
+            else -> "$count music matches found"
         }
 
-        // Fallback: search the raw selected text directly
+        binding.recyclerView.layoutManager = LinearLayoutManager(requireContext())
+        binding.recyclerView.adapter = MentionsAdapter(mentions) { mention ->
+            SearchLauncher.searchOnYouTube(requireContext(), mention.searchQuery)
+            dismiss()
+        }
+
         binding.searchRawButton.setOnClickListener {
-            val query = rawText.take(200).trim()
-            if (query.isNotBlank()) {
-                SearchLauncher.searchOnYouTube(requireContext(), query)
-            }
+            SearchLauncher.searchOnYouTube(requireContext(), rawText.take(200).trim())
             dismiss()
         }
     }
@@ -80,8 +69,6 @@ class ResultsBottomSheet : BottomSheetDialogFragment() {
         super.onDestroyView()
         _binding = null
     }
-
-    // --- Adapter ---
 
     private class MentionsAdapter(
         private val items: List<MusicMention>,
@@ -94,10 +81,8 @@ class ResultsBottomSheet : BottomSheetDialogFragment() {
             val context: TextView = item.findViewById(R.id.textContext)
         }
 
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
-            val v = LayoutInflater.from(parent.context).inflate(R.layout.item_music_mention, parent, false)
-            return VH(v)
-        }
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH =
+            VH(LayoutInflater.from(parent.context).inflate(R.layout.item_music_mention, parent, false))
 
         override fun getItemCount() = items.size
 
@@ -106,7 +91,7 @@ class ResultsBottomSheet : BottomSheetDialogFragment() {
             holder.title.text = item.title
             holder.artist.text = item.artist ?: ""
             holder.artist.visibility = if (item.artist != null) View.VISIBLE else View.GONE
-            holder.context.text = "\"${item.context}\""
+            holder.context.text = item.context
             holder.itemView.setOnClickListener { onTap(item) }
         }
     }

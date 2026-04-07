@@ -127,24 +127,30 @@ class CameraActivity : AppCompatActivity() {
     }
 
     private fun autoPlayOrShowSheet(mentions: List<MusicMention>, rawText: String) {
-        val top = mentions.firstOrNull()
+        when {
+            // Nothing detected → search raw OCR text immediately
+            mentions.isEmpty() -> {
+                SearchLauncher.searchOnYouTube(this, rawText.take(200).trim())
+                resetCapture()
+            }
 
-        // Single HIGH-confidence match → launch instantly, reset camera after
-        if (mentions.size == 1 && top?.confidence == Confidence.HIGH) {
-            SearchLauncher.searchOnYouTube(this, top.searchQuery)
-            resetCapture()
-            return
-        }
+            // Single HIGH → launch instantly
+            mentions.size == 1 && mentions.first().confidence == Confidence.HIGH -> {
+                SearchLauncher.searchOnYouTube(this, mentions.first().searchQuery)
+                resetCapture()
+            }
 
-        // Multiple matches with a HIGH one on top → auto-launch best, show sheet for the rest
-        if (top?.confidence == Confidence.HIGH) {
-            SearchLauncher.searchOnYouTube(this, top.searchQuery)
-        }
-
-        ResultsBottomSheet.show(supportFragmentManager, mentions, rawText = rawText)
-        supportFragmentManager.addFragmentOnAttachListener { _, fragment ->
-            if (fragment is com.google.android.material.bottomsheet.BottomSheetDialogFragment) {
-                fragment.dialog?.setOnDismissListener { resetCapture() }
+            // Multiple or lower confidence → show sheet; auto-launch top if HIGH
+            else -> {
+                if (mentions.first().confidence == Confidence.HIGH) {
+                    SearchLauncher.searchOnYouTube(this, mentions.first().searchQuery)
+                }
+                ResultsBottomSheet.show(supportFragmentManager, mentions, rawText = rawText)
+                supportFragmentManager.addFragmentOnAttachListener { _, fragment ->
+                    if (fragment is com.google.android.material.bottomsheet.BottomSheetDialogFragment) {
+                        fragment.dialog?.setOnDismissListener { resetCapture() }
+                    }
+                }
             }
         }
     }
