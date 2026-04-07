@@ -1,11 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
     android:background="@drawable/bottom_sheet_background"
-    android:paddingBottom="24dp">
+    android:paddingBottom="20dp">
 
     <!-- Drag handle -->
     <View
@@ -13,74 +12,41 @@
         android:layout_height="4dp"
         android:layout_gravity="center_horizontal"
         android:layout_marginTop="12dp"
-        android:layout_marginBottom="20dp"
+        android:layout_marginBottom="18dp"
         android:background="@drawable/drag_handle" />
 
-    <!-- Header row -->
-    <LinearLayout
+    <!-- Header -->
+    <TextView
+        android:id="@+id/headerText"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
+        android:text="Select music to play"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:textColor="@color/text_primary"
         android:paddingHorizontal="20dp"
-        android:paddingBottom="12dp">
+        android:paddingBottom="10dp" />
 
-        <ImageView
-            android:layout_width="22dp"
-            android:layout_height="22dp"
-            android:src="@drawable/ic_music_note"
-            android:layout_marginEnd="10dp"
-            android:contentDescription="music" />
-
-        <TextView
-            android:id="@+id/headerText"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Music found"
-            android:textSize="17sp"
-            android:textStyle="bold"
-            android:textColor="@color/text_primary" />
-    </LinearLayout>
-
-    <!-- Divider -->
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="1dp"
-        android:background="@color/divider"
-        android:layout_marginBottom="4dp" />
-
-    <!-- Results list -->
+    <!-- Up to 4 results -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recyclerView"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:nestedScrollingEnabled="false"
-        android:clipToPadding="false"
-        android:paddingVertical="4dp" />
+        android:nestedScrollingEnabled="false" />
 
-    <!-- Fallback search button -->
+    <!-- Hidden — kept for view binding compatibility -->
+    <TextView
+        android:id="@+id/emptyHint"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone" />
+
+    <!-- Hidden — kept for view binding compatibility -->
     <com.google.android.material.button.MaterialButton
         android:id="@+id/searchRawButton"
         style="@style/Widget.MaterialComponents.Button.TextButton"
-        android:layout_width="match_parent"
-        android:layout_height="48dp"
-        android:layout_marginHorizontal="12dp"
-        android:layout_marginTop="4dp"
-        android:text="Search selected text directly"
-        android:textSize="13sp"
-        android:textColor="@color/text_secondary" />
-
-    <!-- Empty hint (hidden when results exist) -->
-    <TextView
-        android:id="@+id/emptyHint"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="No specific music detected — searching your text directly…"
-        android:textColor="@color/text_secondary"
-        android:textSize="13sp"
-        android:paddingHorizontal="20dp"
-        android:paddingBottom="8dp"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
         android:visibility="gone" />
 
 </LinearLayout>

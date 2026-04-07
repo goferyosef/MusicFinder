@@ -10,36 +10,27 @@ class ShareActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
 
         val text = intent?.getStringExtra(Intent.EXTRA_TEXT)?.take(10_000)
-        if (text.isNullOrBlank()) {
-            finish()
-            return
-        }
+        if (text.isNullOrBlank()) { finish(); return }
 
         val mentions = MusicDetector.detect(text)
 
-        when {
-            // Nothing detected → search the raw text immediately, no UI
-            mentions.isEmpty() -> {
+        when (mentions.size) {
+            0 -> {
+                // Nothing detected — search raw text directly
                 SearchLauncher.searchOnYouTube(this, text.take(200).trim())
                 finish()
             }
-
-            // Single HIGH-confidence → launch instantly, no UI
-            mentions.size == 1 && mentions.first().confidence == Confidence.HIGH -> {
+            1 -> {
+                // Single match — play immediately
                 SearchLauncher.searchOnYouTube(this, mentions.first().searchQuery)
                 finish()
             }
-
-            // Multiple or lower confidence → show sheet; also auto-launch top if HIGH
             else -> {
-                if (mentions.first().confidence == Confidence.HIGH) {
-                    SearchLauncher.searchOnYouTube(this, mentions.first().searchQuery)
-                }
+                // 2–4 matches — show picker
                 ResultsBottomSheet.show(supportFragmentManager, mentions, rawText = text)
                 supportFragmentManager.addFragmentOnAttachListener { _, fragment ->
-                    if (fragment is com.google.android.material.bottomsheet.BottomSheetDialogFragment) {
+                    if (fragment is com.google.android.material.bottomsheet.BottomSheetDialogFragment)
                         fragment.dialog?.setOnDismissListener { finish() }
-                    }
                 }
             }
         }

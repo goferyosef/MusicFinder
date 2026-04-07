@@ -127,29 +127,20 @@ class CameraActivity : AppCompatActivity() {
     }
 
     private fun autoPlayOrShowSheet(mentions: List<MusicMention>, rawText: String) {
-        when {
-            // Nothing detected → search raw OCR text immediately
-            mentions.isEmpty() -> {
+        when (mentions.size) {
+            0 -> {
                 SearchLauncher.searchOnYouTube(this, rawText.take(200).trim())
                 resetCapture()
             }
-
-            // Single HIGH → launch instantly
-            mentions.size == 1 && mentions.first().confidence == Confidence.HIGH -> {
+            1 -> {
                 SearchLauncher.searchOnYouTube(this, mentions.first().searchQuery)
                 resetCapture()
             }
-
-            // Multiple or lower confidence → show sheet; auto-launch top if HIGH
             else -> {
-                if (mentions.first().confidence == Confidence.HIGH) {
-                    SearchLauncher.searchOnYouTube(this, mentions.first().searchQuery)
-                }
                 ResultsBottomSheet.show(supportFragmentManager, mentions, rawText = rawText)
                 supportFragmentManager.addFragmentOnAttachListener { _, fragment ->
-                    if (fragment is com.google.android.material.bottomsheet.BottomSheetDialogFragment) {
+                    if (fragment is com.google.android.material.bottomsheet.BottomSheetDialogFragment)
                         fragment.dialog?.setOnDismissListener { resetCapture() }
-                    }
                 }
             }
         }

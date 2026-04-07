@@ -5,12 +5,22 @@
     android:orientation="horizontal"
     android:gravity="center_vertical"
     android:paddingHorizontal="20dp"
-    android:paddingVertical="14dp"
+    android:paddingVertical="16dp"
     android:background="?attr/selectableItemBackground"
     android:clickable="true"
     android:focusable="true">
 
-    <!-- Text content -->
+    <!-- Play icon -->
+    <ImageView
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:src="@drawable/ic_play"
+        android:background="@drawable/play_button_background"
+        android:padding="10dp"
+        android:layout_marginEnd="16dp"
+        android:contentDescription="Play" />
+
+    <!-- Text -->
     <LinearLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"
@@ -31,7 +41,7 @@
             android:layout_height="wrap_content"
             android:textSize="13sp"
             android:textColor="@color/primary"
-            android:layout_marginTop="1dp" />
+            android:layout_marginTop="2dp" />
 
         <TextView
             android:id="@+id/textContext"
@@ -41,19 +51,9 @@
             android:textColor="@color/text_secondary"
             android:maxLines="1"
             android:ellipsize="end"
-            android:layout_marginTop="3dp"
+            android:layout_marginTop="2dp"
             android:fontFamily="serif"
             android:textStyle="italic" />
     </LinearLayout>
-
-    <!-- Play icon -->
-    <ImageView
-        android:layout_width="36dp"
-        android:layout_height="36dp"
-        android:src="@drawable/ic_play"
-        android:layout_marginStart="12dp"
-        android:contentDescription="Play on YouTube"
-        android:background="@drawable/play_button_background"
-        android:padding="8dp" />
 
 </LinearLayout>

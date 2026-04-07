@@ -116,6 +116,6 @@ object MusicDetector {
             }
         }
 
-        return results.sortedBy { it.confidence.ordinal }
+        return results.sortedBy { it.confidence.ordinal }.take(4)
     }
 }
