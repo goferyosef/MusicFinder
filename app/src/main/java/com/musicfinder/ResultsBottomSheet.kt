@@ -42,7 +42,12 @@ class ResultsBottomSheet : BottomSheetDialogFragment() {
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        val parcelables = arguments?.getParcelableArrayList<MusicMentionParcelable>(ARG_MENTIONS) ?: emptyList<MusicMentionParcelable>()
+        @Suppress("DEPRECATION")
+        val parcelables: List<MusicMentionParcelable> =
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU)
+                arguments?.getParcelableArrayList(ARG_MENTIONS, MusicMentionParcelable::class.java) ?: emptyList()
+            else
+                arguments?.getParcelableArrayList(ARG_MENTIONS) ?: emptyList()
         val mentions = parcelables.map { it.toMusicMention() }
         val rawText = arguments?.getString(ARG_RAW) ?: ""
 
