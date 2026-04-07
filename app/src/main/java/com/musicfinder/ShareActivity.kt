@@ -18,21 +18,19 @@ class ShareActivity : AppCompatActivity() {
             0 -> {
                 // Nothing detected — search raw text directly
                 SearchLauncher.searchOnYouTube(this, text.take(200).trim())
-                finish()
             }
             1 -> {
                 // Single match — play immediately
                 SearchLauncher.searchOnYouTube(this, mentions.first().searchQuery)
-                finish()
             }
             else -> {
-                // 2–4 matches — show picker
-                ResultsBottomSheet.show(supportFragmentManager, mentions, rawText = text)
-                supportFragmentManager.addFragmentOnAttachListener { _, fragment ->
-                    if (fragment is com.google.android.material.bottomsheet.BottomSheetDialogFragment)
-                        fragment.dialog?.setOnDismissListener { finish() }
-                }
+                // 2–4 matches — show picker list
+                startActivity(Intent(this, PickerActivity::class.java).apply {
+                    putParcelableArrayListExtra(PickerActivity.EXTRA_MENTIONS, ArrayList(mentions.map { it.toParcelable() }))
+                    putExtra(PickerActivity.EXTRA_RAW, text)
+                })
             }
         }
+        finish()
     }
 }

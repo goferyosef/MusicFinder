@@ -137,11 +137,11 @@ class CameraActivity : AppCompatActivity() {
                 resetCapture()
             }
             else -> {
-                ResultsBottomSheet.show(supportFragmentManager, mentions, rawText = rawText)
-                supportFragmentManager.addFragmentOnAttachListener { _, fragment ->
-                    if (fragment is com.google.android.material.bottomsheet.BottomSheetDialogFragment)
-                        fragment.dialog?.setOnDismissListener { resetCapture() }
-                }
+                startActivity(android.content.Intent(this, PickerActivity::class.java).apply {
+                    putParcelableArrayListExtra(PickerActivity.EXTRA_MENTIONS, ArrayList(mentions.map { it.toParcelable() }))
+                    putExtra(PickerActivity.EXTRA_RAW, rawText)
+                })
+                resetCapture()
             }
         }
     }

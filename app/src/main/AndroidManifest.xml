@@ -50,6 +50,12 @@
             android:exported="false"
             android:screenOrientation="portrait" />
 
+        <!-- Music picker list (shown when 2-4 matches found) -->
+        <activity
+            android:name=".PickerActivity"
+            android:exported="false"
+            android:theme="@style/Theme.MusicFinder.Dialog" />
+
     </application>
 
 </manifest>
