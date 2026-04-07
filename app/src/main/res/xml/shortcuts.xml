@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Declares MusicFinder as a share target so it appears prominently
+         in the Direct Share row at the top of the Android share sheet -->
+    <share-target android:targetClass="com.musicfinder.ShareActivity">
+        <data android:mimeType="text/plain" />
+        <category android:name="com.musicfinder.SHARE_TARGET" />
+    </share-target>
+
+</shortcuts>

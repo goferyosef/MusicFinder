@@ -13,8 +13,18 @@ object SearchLauncher {
     fun searchOnYouTube(context: Context, query: String) {
         val url = "https://www.youtube.com/results?search_query=${Uri.encode(query)}"
         require(url.startsWith("https://")) { "Only HTTPS URLs allowed" }
+        val uri = Uri.parse(url)
 
-        // 1. Try YouTube app directly (fastest, ad-free search within the app)
+        // 1. Brave browser with YouTube (ad-free) — preferred
+        val braveIntent = Intent(Intent.ACTION_VIEW, uri).apply {
+            setPackage(BRAVE_PACKAGE)
+        }
+        if (braveIntent.resolveActivity(context.packageManager) != null) {
+            context.startActivity(braveIntent)
+            return
+        }
+
+        // 2. YouTube app directly
         val youtubeAppIntent = Intent(Intent.ACTION_SEARCH).apply {
             setPackage(YOUTUBE_PACKAGE)
             putExtra("query", query)
@@ -24,18 +34,9 @@ object SearchLauncher {
             return
         }
 
-        // 2. Try Brave browser (ad-blocking)
-        val braveIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
-            setPackage(BRAVE_PACKAGE)
-        }
-        if (braveIntent.resolveActivity(context.packageManager) != null) {
-            context.startActivity(braveIntent)
-            return
-        }
-
         // 3. Fallback: system default browser
         try {
-            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+            context.startActivity(Intent(Intent.ACTION_VIEW, uri))
         } catch (e: Exception) {
             Toast.makeText(context, "No browser found to open the search", Toast.LENGTH_SHORT).show()
         }
