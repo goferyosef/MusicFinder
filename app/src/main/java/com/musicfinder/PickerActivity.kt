@@ -63,13 +63,15 @@ class PickerActivity : AppCompatActivity() {
 
         // Share path: search with animated loading screen
         val text = intent.getStringExtra(EXTRA_QUERY) ?: run { finish(); return }
-        startLoadingAnimation()
+
+        // Detect query early so we can show it in the loading header
+        val mentions = MusicDetector.detect(text)
+        val query = if (mentions.isNotEmpty()) mentions.first().searchQuery
+                    else text.take(150).trim()
+
+        startLoadingAnimation(query)
 
         lifecycleScope.launch {
-            val mentions = MusicDetector.detect(text)
-            val query = if (mentions.isNotEmpty()) mentions.first().searchQuery
-                        else text.take(150).trim()
-
             val results = MusicSearchService.search(query, packageManager)
             stopLoadingAnimation()
 
@@ -89,10 +91,10 @@ class PickerActivity : AppCompatActivity() {
         }
     }
 
-    private fun startLoadingAnimation() {
+    private fun startLoadingAnimation(query: String) {
         binding.loadingBlock.visibility = View.VISIBLE
         binding.recyclerView.visibility = View.GONE
-        binding.headerText.text = "On it…"
+        binding.headerText.text = "On it: $query"
 
         spinAnimator = ObjectAnimator.ofFloat(binding.spinningNote, "rotation", 0f, 360f).apply {
             duration = 900

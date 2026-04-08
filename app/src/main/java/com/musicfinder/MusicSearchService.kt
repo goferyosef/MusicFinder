@@ -19,28 +19,23 @@ object MusicSearchService {
     )
     private const val TIMEOUT_MS = 5000
 
-    /**
-     * Searches all available music outlets in parallel.
-     * Subscription apps (Spotify, Tidal, etc.) are listed first.
-     * Returns up to 4 results total.
-     */
+    // Words that indicate a non-music result slipping through (kids content, memes, etc.)
+    private val JUNK_KEYWORDS = setOf(
+        "nursery", "rhyme", "lullaby", "cartoon", "kids", "children",
+        "baby shark", "jelly", "eyeball", "minecraft", "roblox", "fortnite",
+        "asmr", "unboxing", "review", "tutorial", "gameplay", "reaction",
+        "meme", "compilation", "funny", "prank", "vlogs", "vlog"
+    )
+
     suspend fun search(query: String, pm: PackageManager): List<SearchResult> =
         withContext(Dispatchers.IO) {
             val installedApps = AppDetector.getInstalled(pm)
-
-            // Build parallel search jobs for each installed app + YouTube via Piped
-            val jobs = installedApps.map { app ->
-                async { searchForApp(query, app) }
-            }
-
-            val allResults = jobs.awaitAll().flatten()
+            val jobs = installedApps.map { app -> async { searchForApp(query, app) } }
+            jobs.awaitAll().flatten()
                 .distinctBy { it.trackName.lowercase() + it.outlet }
                 .take(4)
-
-            allResults
         }
 
-    /** Searches a specific music app for the query and returns up to 2 results for it. */
     private suspend fun searchForApp(query: String, app: MusicApp): List<SearchResult> =
         withContext(Dispatchers.IO) {
             when (app.label) {
@@ -49,14 +44,20 @@ object MusicSearchService {
             }
         }
 
-    /** Searches YouTube via Piped (free, no API key). Tries multiple filters for best coverage. */
+    /**
+     * Searches YouTube via Piped.
+     * Only uses music-specific filters — never falls back to generic video search.
+     * Results are relevance-checked against the query before returning.
+     */
     private fun searchPiped(query: String, outlet: String, limit: Int): List<SearchResult> {
-        val filters = listOf("music_songs", "music_videos", "videos")
+        // music_songs is most precise; music_videos as fallback — never generic videos
+        val filters = listOf("music_songs", "music_videos")
         for (filter in filters) {
             for (instance in PIPED_INSTANCES) {
                 try {
                     val results = queryPiped(instance, query, filter, outlet, limit)
-                    if (results.isNotEmpty()) return results
+                    val relevant = results.filter { isRelevant(it, query) }
+                    if (relevant.isNotEmpty()) return relevant
                 } catch (_: Exception) {}
             }
         }
@@ -87,14 +88,14 @@ object MusicSearchService {
             val videoPath = item.optString("url").ifBlank { null } ?: continue
             val videoId = videoPath.substringAfter("v=").substringBefore("&").ifBlank { null }
             val year = Regex("""\((\d{4})\)""").find(title)?.groupValues?.get(1)
+                ?: Regex("""\b(19|20)\d{2}\b""").find(title)?.value
 
-            val playUrl = if (videoId != null)
-                "https://www.youtube.com/watch?v=$videoId&autoplay=1"
-            else
-                "https://www.youtube.com$videoPath&autoplay=1"
+            val playUrl = "https://www.youtube.com/watch?v=$videoId&autoplay=1"
+                .takeIf { videoId != null }
+                ?: "https://www.youtube.com$videoPath&autoplay=1"
 
             results.add(SearchResult(
-                trackName = title,
+                trackName = cleanTitle(title),
                 artistName = uploader,
                 year = year,
                 outlet = outlet,
@@ -106,10 +107,29 @@ object MusicSearchService {
     }
 
     /**
-     * For subscription apps (Spotify, Tidal, Deezer, etc.) we can't search their API
-     * without a key, so we create a deep-link result that opens a search in the app.
-     * The app auto-plays the top result.
+     * Checks that the result is actually relevant to the query.
+     * Rejects junk (kids/gaming/reaction content) and results that share
+     * no meaningful words with what was searched.
      */
+    private fun isRelevant(result: SearchResult, query: String): Boolean {
+        val combined = "${result.trackName} ${result.artistName}".lowercase()
+
+        // Reject known junk
+        if (JUNK_KEYWORDS.any { it in combined }) return false
+
+        // At least one significant word from the query must appear in the result
+        val queryWords = query.lowercase().split(Regex("\\s+"))
+            .filter { it.length > 2 }  // skip short words like "by", "a", "the"
+        return queryWords.any { it in combined }
+    }
+
+    /** Strips YouTube noise from titles: "(Official Video)", "[HQ]", "4K", etc. */
+    private fun cleanTitle(title: String): String =
+        title
+            .replace(Regex("""\s*[\(\[](Official|Audio|Video|Lyric|HQ|HD|4K|Remaster|Live|Visualizer|Music Video|Topic|Auto-generated)[^\)\]]*[\)\]]""", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("""\s*\|\s*.+$"""), "")  // remove "| Artist Name" suffix
+            .trim()
+
     private fun buildSubscriptionResult(query: String, app: MusicApp): SearchResult {
         val encoded = URLEncoder.encode(query, "UTF-8")
         val playUrl = when (app.label) {
@@ -117,7 +137,7 @@ object MusicSearchService {
             "Tidal"        -> "https://tidal.com/search?q=$encoded"
             "Deezer"       -> "deezer://www.deezer.com/search/$encoded"
             "Amazon Music" -> "https://music.amazon.com/search/$encoded"
-            else           -> "https://www.google.com/search?q=${encoded}+site:${app.label.lowercase().replace(" ", "")}.com"
+            else           -> "https://www.google.com/search?q=$encoded+${URLEncoder.encode(app.label, "UTF-8")}"
         }
         return SearchResult(
             trackName = query,
@@ -128,7 +148,6 @@ object MusicSearchService {
         )
     }
 
-    /** Converts detected MusicMentions into vague fallback results. */
     fun mentionsToVague(mentions: List<MusicMention>): List<SearchResult> =
         mentions.take(4).map { m ->
             val encoded = URLEncoder.encode(m.searchQuery, "UTF-8")
