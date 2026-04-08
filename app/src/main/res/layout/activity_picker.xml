@@ -10,7 +10,7 @@
         android:id="@+id/headerText"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Select to play"
+        android:text="Searching…"
         android:textSize="15sp"
         android:textStyle="bold"
         android:textColor="@color/green_dark"
@@ -26,12 +26,23 @@
         android:background="@color/green_divider"
         android:layout_marginHorizontal="16dp" />
 
+    <!-- Loading spinner -->
+    <ProgressBar
+        android:id="@+id/progressBar"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:indeterminateTint="@color/green_medium"
+        android:paddingVertical="24dp"
+        android:visibility="visible" />
+
     <!-- Results list -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recyclerView"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:paddingBottom="8dp"
-        android:nestedScrollingEnabled="false" />
+        android:nestedScrollingEnabled="false"
+        android:visibility="gone" />
 
 </LinearLayout>
