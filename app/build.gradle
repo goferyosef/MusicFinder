@@ -52,4 +52,8 @@ dependencies {
 
     // ML Kit OCR — bundled on-device model, no API key needed
     implementation 'com.google.mlkit:text-recognition:16.0.1'
+
+    // Coroutines for async iTunes search
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
+    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.8.3'
 }

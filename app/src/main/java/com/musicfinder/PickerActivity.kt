@@ -6,7 +6,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
-import androidx.recyclerview.widget.DividerItemDecoration
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.musicfinder.databinding.ActivityPickerBinding
@@ -16,8 +15,7 @@ class PickerActivity : AppCompatActivity() {
     private lateinit var binding: ActivityPickerBinding
 
     companion object {
-        const val EXTRA_MENTIONS = "mentions"
-        const val EXTRA_RAW = "raw_text"
+        const val EXTRA_RESULTS = "results"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -26,45 +24,51 @@ class PickerActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         @Suppress("DEPRECATION")
-        val parcelables: List<MusicMentionParcelable> =
+        val results: List<SearchResult> =
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU)
-                intent.getParcelableArrayListExtra(EXTRA_MENTIONS, MusicMentionParcelable::class.java) ?: emptyList()
+                intent.getParcelableArrayListExtra(EXTRA_RESULTS, SearchResult::class.java) ?: emptyList()
             else
-                intent.getParcelableArrayListExtra(EXTRA_MENTIONS) ?: emptyList()
+                intent.getParcelableArrayListExtra(EXTRA_RESULTS) ?: emptyList()
 
-        val mentions = parcelables.map { it.toMusicMention() }
+        val hasVague = results.any { it.isVague }
+        binding.headerText.text = if (hasVague) "Possible matches — tap to play"
+                                   else "Select to play"
 
-        binding.headerText.text = "Select music to play (${mentions.size} found)"
         binding.recyclerView.layoutManager = LinearLayoutManager(this)
-        binding.recyclerView.addItemDecoration(DividerItemDecoration(this, DividerItemDecoration.VERTICAL))
-        binding.recyclerView.adapter = MentionsAdapter(mentions) { mention ->
-            SearchLauncher.searchOnYouTube(this, mention.searchQuery)
+        binding.recyclerView.adapter = ResultsAdapter(results) { result ->
+            SearchLauncher.searchOnYouTube(this, result.youtubeQuery)
             finish()
         }
     }
 
-    private class MentionsAdapter(
-        private val items: List<MusicMention>,
-        private val onTap: (MusicMention) -> Unit
-    ) : RecyclerView.Adapter<MentionsAdapter.VH>() {
+    private class ResultsAdapter(
+        private val items: List<SearchResult>,
+        private val onTap: (SearchResult) -> Unit
+    ) : RecyclerView.Adapter<ResultsAdapter.VH>() {
 
         inner class VH(item: View) : RecyclerView.ViewHolder(item) {
-            val title: TextView = item.findViewById(R.id.textTitle)
+            val track: TextView = item.findViewById(R.id.textTrack)
             val artist: TextView = item.findViewById(R.id.textArtist)
-            val context: TextView = item.findViewById(R.id.textContext)
+            val meta: TextView = item.findViewById(R.id.textMeta)
+            val vagueLabel: TextView = item.findViewById(R.id.textVague)
         }
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH =
-            VH(LayoutInflater.from(parent.context).inflate(R.layout.item_music_mention, parent, false))
+            VH(LayoutInflater.from(parent.context).inflate(R.layout.item_search_result, parent, false))
 
         override fun getItemCount() = items.size
 
         override fun onBindViewHolder(holder: VH, position: Int) {
             val item = items[position]
-            holder.title.text = item.title
-            holder.artist.text = item.artist ?: ""
-            holder.artist.visibility = if (item.artist != null) View.VISIBLE else View.GONE
-            holder.context.text = item.context
+            holder.track.text = item.trackName
+            holder.artist.text = item.artistName.ifBlank { "" }
+            holder.artist.visibility = if (item.artistName.isNotBlank()) View.VISIBLE else View.GONE
+
+            val meta = listOfNotNull(item.albumName, item.year).joinToString(" · ")
+            holder.meta.text = meta
+            holder.meta.visibility = if (meta.isNotBlank()) View.VISIBLE else View.GONE
+
+            holder.vagueLabel.visibility = if (item.isVague) View.VISIBLE else View.GONE
             holder.itemView.setOnClickListener { onTap(item) }
         }
     }

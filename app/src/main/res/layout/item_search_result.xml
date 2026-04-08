@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingHorizontal="20dp"
+    android:paddingVertical="14dp"
+    android:background="?attr/selectableItemBackground"
+    android:clickable="true"
+    android:focusable="true">
+
+    <!-- Play icon -->
+    <ImageView
+        android:layout_width="38dp"
+        android:layout_height="38dp"
+        android:src="@drawable/ic_play"
+        android:background="@drawable/play_circle_green"
+        android:padding="10dp"
+        android:layout_marginEnd="16dp"
+        android:contentDescription="Play" />
+
+    <!-- Text block -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/textTrack"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:textColor="@color/green_dark"
+            android:fontFamily="sans-serif-medium" />
+
+        <TextView
+            android:id="@+id/textArtist"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="13sp"
+            android:textColor="@color/green_medium"
+            android:layout_marginTop="2dp"
+            android:fontFamily="sans-serif" />
+
+        <TextView
+            android:id="@+id/textMeta"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="11sp"
+            android:textColor="@color/green_light"
+            android:layout_marginTop="2dp"
+            android:fontFamily="sans-serif" />
+
+        <TextView
+            android:id="@+id/textVague"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="possible match"
+            android:textSize="10sp"
+            android:textColor="@color/green_light"
+            android:textStyle="italic"
+            android:layout_marginTop="2dp"
+            android:visibility="gone" />
+    </LinearLayout>
+
+</LinearLayout>

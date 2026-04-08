@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- App theme -->
     <color name="primary">#6750A4</color>
     <color name="primary_variant">#4F378B</color>
     <color name="background">#FFFBFE</color>
@@ -7,4 +8,12 @@
     <color name="text_primary">#1C1B1F</color>
     <color name="text_secondary">#49454F</color>
     <color name="divider">#CAC4D0</color>
+
+    <!-- Picker screen — light blue background, deep green text -->
+    <color name="picker_bg">#E8F4FD</color>
+    <color name="green_dark">#1B5E20</color>
+    <color name="green_medium">#2E7D32</color>
+    <color name="green_light">#4CAF50</color>
+    <color name="green_divider">#A5D6A7</color>
+    <color name="green_circle">#C8E6C9</color>
 </resources>
