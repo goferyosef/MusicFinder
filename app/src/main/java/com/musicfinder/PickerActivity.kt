@@ -36,7 +36,7 @@ class PickerActivity : AppCompatActivity() {
 
         binding.recyclerView.layoutManager = LinearLayoutManager(this)
         binding.recyclerView.adapter = ResultsAdapter(results) { result ->
-            SearchLauncher.searchOnYouTube(this, result.youtubeQuery)
+            SearchLauncher.play(this, result)
             finish()
         }
     }

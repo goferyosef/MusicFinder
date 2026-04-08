@@ -24,7 +24,7 @@ class ShareActivity : AppCompatActivity() {
             when {
                 // 1 clear result — play immediately
                 results.size == 1 -> {
-                    SearchLauncher.searchOnYouTube(this@ShareActivity, results.first().youtubeQuery)
+                    SearchLauncher.play(this@ShareActivity, results.first())
                     finish()
                 }
 

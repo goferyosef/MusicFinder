@@ -9,58 +9,76 @@ import java.net.URLEncoder
 
 object MusicSearchService {
 
-    private const val TIMEOUT_MS = 4000
+    // Piped: open-source YouTube proxy, free, no API key.
+    // Multiple instances for reliability.
+    private val PIPED_INSTANCES = listOf(
+        "https://pipedapi.kavin.rocks",
+        "https://pipedapi.adminforge.de",
+        "https://piped-api.garudalinux.org"
+    )
+
+    private const val TIMEOUT_MS = 5000
 
     /**
-     * Searches the iTunes API (free, no key) for the given query.
-     * Returns up to [limit] results with track name, artist, album, and year.
-     * Falls back to an empty list on any network error.
+     * Searches YouTube (via Piped) for music matching [query].
+     * Returns up to [limit] results — every entry has a direct, playable YouTube URL.
      */
     suspend fun search(query: String, limit: Int = 5): List<SearchResult> =
         withContext(Dispatchers.IO) {
-            try {
-                val encoded = URLEncoder.encode(query, "UTF-8")
-                val url = URL("https://itunes.apple.com/search?term=$encoded&media=music&entity=song&limit=$limit")
-                val conn = url.openConnection() as HttpURLConnection
-                conn.connectTimeout = TIMEOUT_MS
-                conn.readTimeout = TIMEOUT_MS
-                conn.setRequestProperty("User-Agent", "MusicFinder/1.0")
-
-                val json = conn.inputStream.bufferedReader().readText()
-                conn.disconnect()
-
-                val root = JSONObject(json)
-                val items = root.getJSONArray("results")
-
-                (0 until items.length()).mapNotNull { i ->
-                    val item = items.getJSONObject(i)
-                    val track = item.optString("trackName").ifBlank { null } ?: return@mapNotNull null
-                    val artist = item.optString("artistName").ifBlank { "" }
-                    val album = item.optString("collectionName").ifBlank { null }
-                    val year = item.optString("releaseDate").take(4).ifBlank { null }
-
-                    SearchResult(
-                        trackName = track,
-                        artistName = artist,
-                        albumName = album,
-                        year = year,
-                        youtubeQuery = "$track $artist"
-                    )
+            for (instance in PIPED_INSTANCES) {
+                try {
+                    val results = queryPiped(instance, query, limit)
+                    if (results.isNotEmpty()) return@withContext results
+                } catch (_: Exception) {
+                    // try next instance
                 }
-            } catch (e: Exception) {
-                emptyList()
             }
+            emptyList()
         }
 
-    /** Converts detected MusicMentions into vague SearchResults for fallback display. */
+    private fun queryPiped(baseUrl: String, query: String, limit: Int): List<SearchResult> {
+        val encoded = URLEncoder.encode(query, "UTF-8")
+        // filter=music_songs → only music videos on YouTube
+        val url = URL("$baseUrl/search?q=$encoded&filter=music_songs")
+        val conn = url.openConnection() as HttpURLConnection
+        conn.connectTimeout = TIMEOUT_MS
+        conn.readTimeout = TIMEOUT_MS
+        conn.setRequestProperty("User-Agent", "MusicFinder/1.0")
+
+        val json = conn.inputStream.bufferedReader().readText()
+        conn.disconnect()
+
+        val items = JSONObject(json).getJSONArray("items")
+
+        return (0 until minOf(items.length(), limit)).mapNotNull { i ->
+            val item = items.getJSONObject(i)
+            val title = item.optString("title").ifBlank { null } ?: return@mapNotNull null
+            val uploader = item.optString("uploader").ifBlank { "" }
+            val videoPath = item.optString("url").ifBlank { null } ?: return@mapNotNull null
+            // videoPath is "/watch?v=VIDEO_ID"
+            val youtubeUrl = "https://www.youtube.com$videoPath"
+
+            // Some titles include year in parentheses e.g. "Yesterday (1965 Remaster)"
+            val year = Regex("""\((\d{4})\)""").find(title)?.groupValues?.get(1)
+
+            SearchResult(
+                trackName = title,
+                artistName = uploader,
+                year = year,
+                youtubeUrl = youtubeUrl
+            )
+        }
+    }
+
+    /** Converts detected MusicMentions into vague results when live search fails. */
     fun mentionsToVague(mentions: List<MusicMention>): List<SearchResult> =
         mentions.map { m ->
             SearchResult(
                 trackName = m.title,
                 artistName = m.artist ?: "",
-                albumName = null,
                 year = null,
-                youtubeQuery = m.searchQuery,
+                youtubeUrl = "https://www.youtube.com/results?search_query=${
+                    URLEncoder.encode(m.searchQuery, "UTF-8")}",
                 isVague = true
             )
         }
