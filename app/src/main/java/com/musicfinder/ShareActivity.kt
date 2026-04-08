@@ -37,7 +37,7 @@ class ShareActivity : AppCompatActivity() {
                 results.isEmpty() && mentions.isNotEmpty() -> {
                     val vague = MusicSearchService.mentionsToVague(mentions)
                     if (vague.size == 1) {
-                        SearchLauncher.searchOnYouTube(this@ShareActivity, vague.first().youtubeQuery)
+                        SearchLauncher.play(this@ShareActivity, vague.first())
                         finish()
                     } else {
                         openPicker(vague)

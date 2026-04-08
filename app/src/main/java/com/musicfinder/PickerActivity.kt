@@ -64,7 +64,7 @@ class PickerActivity : AppCompatActivity() {
             holder.artist.text = item.artistName.ifBlank { "" }
             holder.artist.visibility = if (item.artistName.isNotBlank()) View.VISIBLE else View.GONE
 
-            val meta = listOfNotNull(item.albumName, item.year).joinToString(" · ")
+            val meta = listOfNotNull(item.year).joinToString(" · ")
             holder.meta.text = meta
             holder.meta.visibility = if (meta.isNotBlank()) View.VISIBLE else View.GONE
 
