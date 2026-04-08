@@ -133,7 +133,7 @@ class CameraActivity : AppCompatActivity() {
                     else rawText.take(150).trim()
 
         lifecycleScope.launch {
-            val results = MusicSearchService.search(query)
+            val results = MusicSearchService.search(query, packageManager)
             when {
                 results.size == 1 -> {
                     SearchLauncher.play(this@CameraActivity, results.first())

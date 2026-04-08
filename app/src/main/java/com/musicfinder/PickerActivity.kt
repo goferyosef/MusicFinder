@@ -1,7 +1,5 @@
 package com.musicfinder
 
-import android.animation.Animator
-import android.animation.AnimatorSet
 import android.animation.ObjectAnimator
 import android.os.Bundle
 import android.os.Handler
@@ -72,25 +70,17 @@ class PickerActivity : AppCompatActivity() {
             val query = if (mentions.isNotEmpty()) mentions.first().searchQuery
                         else text.take(150).trim()
 
-            val results = MusicSearchService.search(query)
-
+            val results = MusicSearchService.search(query, packageManager)
             stopLoadingAnimation()
 
             when {
-                results.size == 1 -> {
-                    SearchLauncher.play(this@PickerActivity, results.first())
-                    finish()
-                }
-                results.size in 2..5 -> showResults(results)
-                results.isEmpty() && mentions.isNotEmpty() -> {
-                    val vague = MusicSearchService.mentionsToVague(mentions)
-                    if (vague.size == 1) {
-                        SearchLauncher.play(this@PickerActivity, vague.first())
-                        finish()
-                    } else {
-                        showResults(vague)
-                    }
-                }
+                // 1–4 results → always show list, let user pick
+                results.isNotEmpty() -> showResults(results)
+
+                // Nothing from live search → show detected mentions as vague
+                mentions.isNotEmpty() -> showResults(MusicSearchService.mentionsToVague(mentions))
+
+                // Absolute fallback
                 else -> {
                     SearchLauncher.searchOnYouTube(this@PickerActivity, query)
                     finish()
@@ -104,15 +94,12 @@ class PickerActivity : AppCompatActivity() {
         binding.recyclerView.visibility = View.GONE
         binding.headerText.text = "On it…"
 
-        // Continuously rotate the music note
         spinAnimator = ObjectAnimator.ofFloat(binding.spinningNote, "rotation", 0f, 360f).apply {
             duration = 900
             repeatCount = ObjectAnimator.INFINITE
             interpolator = LinearInterpolator()
             start()
         }
-
-        // Cycle through funny messages with a fade transition every 1.8 seconds
         scheduleFunnyMessage()
     }
 
@@ -127,12 +114,10 @@ class PickerActivity : AppCompatActivity() {
     }
 
     private fun fadeTextTo(newText: String) {
-        binding.funnyText.animate()
-            .alpha(0f).setDuration(250)
-            .withEndAction {
-                binding.funnyText.text = newText
-                binding.funnyText.animate().alpha(1f).setDuration(250).start()
-            }.start()
+        binding.funnyText.animate().alpha(0f).setDuration(250).withEndAction {
+            binding.funnyText.text = newText
+            binding.funnyText.animate().alpha(1f).setDuration(250).start()
+        }.start()
     }
 
     private fun stopLoadingAnimation() {
@@ -144,9 +129,7 @@ class PickerActivity : AppCompatActivity() {
     private fun showResults(results: List<SearchResult>) {
         stopLoadingAnimation()
         binding.recyclerView.visibility = View.VISIBLE
-        val hasVague = results.any { it.isVague }
-        binding.headerText.text = if (hasVague) "Possible matches — tap to play"
-                                   else "Tap to play"
+        binding.headerText.text = if (results.any { it.isVague }) "Possible matches" else "Tap to play"
         binding.recyclerView.layoutManager = LinearLayoutManager(this)
         binding.recyclerView.adapter = ResultsAdapter(results) { result ->
             SearchLauncher.play(this, result)
@@ -180,11 +163,17 @@ class PickerActivity : AppCompatActivity() {
         override fun onBindViewHolder(holder: VH, position: Int) {
             val item = items[position]
             holder.track.text = item.trackName
-            holder.artist.text = item.artistName
+            holder.artist.text = item.artistName.ifBlank { "" }
             holder.artist.visibility = if (item.artistName.isNotBlank()) View.VISIBLE else View.GONE
-            val meta = listOfNotNull(item.year).joinToString(" · ")
+
+            // Show outlet + year
+            val meta = listOfNotNull(
+                item.outlet,
+                item.year
+            ).joinToString(" · ")
             holder.meta.text = meta
             holder.meta.visibility = if (meta.isNotBlank()) View.VISIBLE else View.GONE
+
             holder.vagueLabel.visibility = if (item.isVague) View.VISIBLE else View.GONE
             holder.itemView.setOnClickListener { onTap(item) }
         }
