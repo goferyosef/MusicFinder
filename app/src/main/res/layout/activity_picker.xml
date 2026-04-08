@@ -26,17 +26,38 @@
         android:background="@color/green_divider"
         android:layout_marginHorizontal="16dp" />
 
-    <!-- Loading spinner -->
-    <ProgressBar
-        android:id="@+id/progressBar"
-        android:layout_width="wrap_content"
+    <!-- Loading animation block -->
+    <LinearLayout
+        android:id="@+id/loadingBlock"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_gravity="center_horizontal"
-        android:indeterminateTint="@color/green_medium"
-        android:paddingVertical="24dp"
-        android:visibility="visible" />
+        android:orientation="vertical"
+        android:gravity="center"
+        android:paddingVertical="28dp">
 
-    <!-- Results list -->
+        <!-- Spinning music note -->
+        <ImageView
+            android:id="@+id/spinningNote"
+            android:layout_width="64dp"
+            android:layout_height="64dp"
+            android:src="@drawable/ic_music_note"
+            android:layout_marginBottom="16dp"
+            android:contentDescription="searching" />
+
+        <!-- Funny rotating message -->
+        <TextView
+            android:id="@+id/funnyText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Bribing the DJ…"
+            android:textSize="14sp"
+            android:textColor="@color/green_medium"
+            android:fontFamily="sans-serif"
+            android:textStyle="italic"
+            android:gravity="center" />
+    </LinearLayout>
+
+    <!-- Results list (hidden while loading) -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recyclerView"
         android:layout_width="match_parent"
