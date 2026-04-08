@@ -12,7 +12,9 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import androidx.camera.core.*
+import kotlinx.coroutines.launch
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import com.google.mlkit.vision.common.InputImage
@@ -127,21 +129,37 @@ class CameraActivity : AppCompatActivity() {
     }
 
     private fun autoPlayOrShowSheet(mentions: List<MusicMention>, rawText: String) {
-        when (mentions.size) {
-            0 -> {
-                SearchLauncher.searchOnYouTube(this, rawText.take(200).trim())
-                resetCapture()
-            }
-            1 -> {
-                SearchLauncher.searchOnYouTube(this, mentions.first().searchQuery)
-                resetCapture()
-            }
-            else -> {
-                startActivity(android.content.Intent(this, PickerActivity::class.java).apply {
-                    putParcelableArrayListExtra(PickerActivity.EXTRA_MENTIONS, ArrayList(mentions.map { it.toParcelable() }))
-                    putExtra(PickerActivity.EXTRA_RAW, rawText)
-                })
-                resetCapture()
+        val query = if (mentions.isNotEmpty()) mentions.first().searchQuery
+                    else rawText.take(150).trim()
+
+        lifecycleScope.launch {
+            val results = MusicSearchService.search(query)
+            when {
+                results.size == 1 -> {
+                    SearchLauncher.play(this@CameraActivity, results.first())
+                    resetCapture()
+                }
+                results.size in 2..5 -> {
+                    startActivity(Intent(this@CameraActivity, PickerActivity::class.java).apply {
+                        putParcelableArrayListExtra(PickerActivity.EXTRA_RESULTS, ArrayList(results))
+                    })
+                    resetCapture()
+                }
+                results.isEmpty() && mentions.isNotEmpty() -> {
+                    val vague = MusicSearchService.mentionsToVague(mentions)
+                    if (vague.size == 1) {
+                        SearchLauncher.play(this@CameraActivity, vague.first())
+                    } else {
+                        startActivity(Intent(this@CameraActivity, PickerActivity::class.java).apply {
+                            putParcelableArrayListExtra(PickerActivity.EXTRA_RESULTS, ArrayList(vague))
+                        })
+                    }
+                    resetCapture()
+                }
+                else -> {
+                    SearchLauncher.searchOnYouTube(this@CameraActivity, query)
+                    resetCapture()
+                }
             }
         }
     }
