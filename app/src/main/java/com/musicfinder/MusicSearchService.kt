@@ -15,7 +15,9 @@ object MusicSearchService {
     private val PIPED_INSTANCES = listOf(
         "https://pipedapi.kavin.rocks",
         "https://pipedapi.adminforge.de",
-        "https://piped-api.garudalinux.org"
+        "https://piped-api.garudalinux.org",
+        "https://api.piped.projectsegfau.lt",
+        "https://pipedapi.ducks.party"
     )
     private const val TIMEOUT_MS = 5000
 
@@ -27,42 +29,72 @@ object MusicSearchService {
         "meme", "compilation", "funny", "prank", "vlogs", "vlog"
     )
 
+    // Fallback used when AppDetector finds nothing (HyperOS / strict visibility)
+    private val DEFAULT_APPS = listOf(
+        MusicApp("com.google.android.youtube", "YouTube", 6)
+    )
+
     suspend fun search(query: String, pm: PackageManager): List<SearchResult> =
         withContext(Dispatchers.IO) {
-            val installedApps = AppDetector.getInstalled(pm)
+            val installedApps = AppDetector.getInstalled(pm).ifEmpty { DEFAULT_APPS }
             val jobs = installedApps.map { app -> async { searchForApp(query, app) } }
             jobs.awaitAll().flatten()
                 .distinctBy { it.trackName.lowercase() + it.outlet }
-                .take(4)
+                .sortedByDescending { relevanceScore(it, query) }
+                .take(5)
         }
+
+    private fun relevanceScore(result: SearchResult, query: String): Int {
+        val queryWords = query.lowercase().split(Regex("\\s+")).filter { it.length > 2 }
+        val combined = "${result.trackName} ${result.artistName}".lowercase()
+        return queryWords.count { it in combined }
+    }
 
     private suspend fun searchForApp(query: String, app: MusicApp): List<SearchResult> =
         withContext(Dispatchers.IO) {
             when (app.label) {
-                "YouTube", "YouTube Music" -> searchPiped(query, app.label, limit = 2)
+                "YouTube", "YouTube Music" -> searchPiped(query, app.label, limit = 3)
                 else -> listOf(buildSubscriptionResult(query, app))
             }
         }
 
     /**
-     * Searches YouTube via Piped.
-     * Only uses music-specific filters — never falls back to generic video search.
-     * Results are relevance-checked against the query before returning.
+     * Tries all Piped instances IN PARALLEL per filter so a single slow instance
+     * doesn't block the others.  Returns the first non-empty response.
+     *
+     * Preference order:
+     *  1. Results that pass the full relevance check (junk-free + query word overlap)
+     *  2. Results that are at least junk-free (word-overlap relaxed)
+     *  3. Empty list — never returns junk
      */
-    private fun searchPiped(query: String, outlet: String, limit: Int): List<SearchResult> {
-        // music_songs is most precise; music_videos as fallback — never generic videos
-        val filters = listOf("music_songs", "music_videos")
-        for (filter in filters) {
-            for (instance in PIPED_INSTANCES) {
-                try {
-                    val results = queryPiped(instance, query, filter, outlet, limit)
-                    val relevant = results.filter { isRelevant(it, query) }
-                    if (relevant.isNotEmpty()) return relevant
-                } catch (_: Exception) {}
+    private suspend fun searchPiped(query: String, outlet: String, limit: Int): List<SearchResult> =
+        withContext(Dispatchers.IO) {
+            val filters = listOf("music_songs", "music_videos")
+            var bestJunkFree = emptyList<SearchResult>()
+
+            for (filter in filters) {
+                // Race all instances — take first one that responds with results
+                val jobs = PIPED_INSTANCES.map { instance ->
+                    async {
+                        try { queryPiped(instance, query, filter, outlet, limit) }
+                        catch (_: Exception) { emptyList() }
+                    }
+                }
+                val raw = jobs.awaitAll().firstOrNull { it.isNotEmpty() } ?: continue
+
+                val nonJunk = raw.filter { r ->
+                    val c = "${r.trackName} ${r.artistName}".lowercase()
+                    JUNK_KEYWORDS.none { it in c }
+                }
+                val relevant = nonJunk.filter { isRelevant(it, query) }
+
+                if (relevant.isNotEmpty()) return@withContext relevant
+                // Keep best junk-free batch as fallback in case no filter+instance passes relevance
+                if (nonJunk.isNotEmpty() && bestJunkFree.isEmpty()) bestJunkFree = nonJunk
             }
+
+            bestJunkFree   // junk-free but word-overlap relaxed — better than nothing
         }
-        return emptyList()
-    }
 
     private fun queryPiped(baseUrl: String, query: String, filter: String, outlet: String, limit: Int): List<SearchResult> {
         val encoded = URLEncoder.encode(query, "UTF-8")
@@ -106,20 +138,10 @@ object MusicSearchService {
         return results
     }
 
-    /**
-     * Checks that the result is actually relevant to the query.
-     * Rejects junk (kids/gaming/reaction content) and results that share
-     * no meaningful words with what was searched.
-     */
     private fun isRelevant(result: SearchResult, query: String): Boolean {
         val combined = "${result.trackName} ${result.artistName}".lowercase()
-
-        // Reject known junk
         if (JUNK_KEYWORDS.any { it in combined }) return false
-
-        // At least one significant word from the query must appear in the result
-        val queryWords = query.lowercase().split(Regex("\\s+"))
-            .filter { it.length > 2 }  // skip short words like "by", "a", "the"
+        val queryWords = query.lowercase().split(Regex("\\s+")).filter { it.length > 2 }
         return queryWords.any { it in combined }
     }
 
@@ -127,7 +149,7 @@ object MusicSearchService {
     private fun cleanTitle(title: String): String =
         title
             .replace(Regex("""\s*[\(\[](Official|Audio|Video|Lyric|HQ|HD|4K|Remaster|Live|Visualizer|Music Video|Topic|Auto-generated)[^\)\]]*[\)\]]""", RegexOption.IGNORE_CASE), "")
-            .replace(Regex("""\s*\|\s*.+$"""), "")  // remove "| Artist Name" suffix
+            .replace(Regex("""\s*\|\s*.+$"""), "")
             .trim()
 
     private fun buildSubscriptionResult(query: String, app: MusicApp): SearchResult {
@@ -149,7 +171,7 @@ object MusicSearchService {
     }
 
     fun mentionsToVague(mentions: List<MusicMention>): List<SearchResult> =
-        mentions.take(4).map { m ->
+        mentions.take(5).map { m ->
             val encoded = URLEncoder.encode(m.searchQuery, "UTF-8")
             SearchResult(
                 trackName = m.title,
