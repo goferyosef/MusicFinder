@@ -24,39 +24,12 @@ object SearchLauncher {
     fun searchOnYouTube(context: Context, query: String) =
         openUrl(context, "https://www.youtube.com/results?search_query=${Uri.encode(query)}")
 
-    // --- YouTube: try app direct video, then Brave with autoplay ---
-    private fun playYouTube(context: Context, result: SearchResult) {
-        // 1. YouTube app — opens video and auto-plays immediately
-        if (result.videoId != null) {
-            val ytIntent = Intent(Intent.ACTION_VIEW, Uri.parse("vnd.youtube:${result.videoId}")).apply {
-                setPackage(YOUTUBE_PACKAGE)
-                putExtra("force_fullscreen", false)
-            }
-            @Suppress("DEPRECATION")
-            if (ytIntent.resolveActivity(context.packageManager) != null) {
-                context.startActivity(ytIntent)
-                return
-            }
-        }
-        // 2. Brave browser with autoplay=1
+    // --- YouTube / YouTube Music: always open in Brave ---
+    private fun playYouTube(context: Context, result: SearchResult) =
         openUrl(context, result.playUrl)
-    }
 
-    // --- YouTube Music app ---
-    private fun playYouTubeMusic(context: Context, result: SearchResult) {
-        if (result.videoId != null) {
-            val ytmIntent = Intent(Intent.ACTION_VIEW,
-                Uri.parse("https://music.youtube.com/watch?v=${result.videoId}")).apply {
-                setPackage(YOUTUBE_MUSIC_PACKAGE)
-            }
-            @Suppress("DEPRECATION")
-            if (ytmIntent.resolveActivity(context.packageManager) != null) {
-                context.startActivity(ytmIntent)
-                return
-            }
-        }
+    private fun playYouTubeMusic(context: Context, result: SearchResult) =
         openUrl(context, result.playUrl)
-    }
 
     // --- Spotify: deep-link opens app and searches ---
     private fun playSpotify(context: Context, result: SearchResult) {
