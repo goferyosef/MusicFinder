@@ -5,10 +5,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
+import java.util.Calendar
 
 object MusicSearchService {
 
@@ -19,9 +21,14 @@ object MusicSearchService {
         "https://api.piped.projectsegfau.lt",
         "https://pipedapi.ducks.party"
     )
+    private val INVIDIOUS_INSTANCES = listOf(
+        "https://inv.nadeko.net",
+        "https://invidious.privacyredirect.com",
+        "https://yewtu.be",
+        "https://invidious.nerdvpn.de"
+    )
     private const val TIMEOUT_MS = 5000
 
-    // Words that indicate a non-music result slipping through (kids content, memes, etc.)
     private val JUNK_KEYWORDS = setOf(
         "nursery", "rhyme", "lullaby", "cartoon", "kids", "children",
         "baby shark", "jelly", "eyeball", "minecraft", "roblox", "fortnite",
@@ -29,7 +36,7 @@ object MusicSearchService {
         "meme", "compilation", "funny", "prank", "vlogs", "vlog"
     )
 
-    // Fallback used when AppDetector finds nothing (HyperOS / strict visibility)
+    // Fallback if AppDetector finds nothing (HyperOS strict visibility)
     private val DEFAULT_APPS = listOf(
         MusicApp("com.google.android.youtube", "YouTube", 6)
     )
@@ -53,27 +60,22 @@ object MusicSearchService {
     private suspend fun searchForApp(query: String, app: MusicApp): List<SearchResult> =
         withContext(Dispatchers.IO) {
             when (app.label) {
-                "YouTube", "YouTube Music" -> searchPiped(query, app.label, limit = 3)
+                "YouTube", "YouTube Music" -> searchYouTube(query, app.label, limit = 3)
                 else -> listOf(buildSubscriptionResult(query, app))
             }
         }
 
     /**
-     * Tries all Piped instances IN PARALLEL per filter so a single slow instance
-     * doesn't block the others.  Returns the first non-empty response.
-     *
-     * Preference order:
-     *  1. Results that pass the full relevance check (junk-free + query word overlap)
-     *  2. Results that are at least junk-free (word-overlap relaxed)
-     *  3. Empty list — never returns junk
+     * Tries Piped (music_songs → music_videos → videos) then Invidious as fallback.
+     * All instances are queried in parallel so no single slow server delays results.
      */
-    private suspend fun searchPiped(query: String, outlet: String, limit: Int): List<SearchResult> =
+    private suspend fun searchYouTube(query: String, outlet: String, limit: Int): List<SearchResult> =
         withContext(Dispatchers.IO) {
-            val filters = listOf("music_songs", "music_videos")
+            // Piped: music_songs first, then broader filters
+            val pipedFilters = listOf("music_songs", "music_videos", "videos")
             var bestJunkFree = emptyList<SearchResult>()
 
-            for (filter in filters) {
-                // Race all instances — take first one that responds with results
+            for (filter in pipedFilters) {
                 val jobs = PIPED_INSTANCES.map { instance ->
                     async {
                         try { queryPiped(instance, query, filter, outlet, limit) }
@@ -81,29 +83,30 @@ object MusicSearchService {
                     }
                 }
                 val raw = jobs.awaitAll().firstOrNull { it.isNotEmpty() } ?: continue
-
-                val nonJunk = raw.filter { r ->
-                    val c = "${r.trackName} ${r.artistName}".lowercase()
-                    JUNK_KEYWORDS.none { it in c }
-                }
+                val nonJunk = raw.filter { notJunk(it) }
                 val relevant = nonJunk.filter { isRelevant(it, query) }
-
                 if (relevant.isNotEmpty()) return@withContext relevant
-                // Keep best junk-free batch as fallback in case no filter+instance passes relevance
                 if (nonJunk.isNotEmpty() && bestJunkFree.isEmpty()) bestJunkFree = nonJunk
             }
 
-            bestJunkFree   // junk-free but word-overlap relaxed — better than nothing
+            // Piped gave nothing useful — try Invidious
+            if (bestJunkFree.isEmpty()) {
+                val inv = queryInvidious(query, outlet, limit)
+                if (inv.isNotEmpty()) return@withContext inv
+            }
+
+            bestJunkFree
         }
 
-    private fun queryPiped(baseUrl: String, query: String, filter: String, outlet: String, limit: Int): List<SearchResult> {
+    private fun queryPiped(
+        baseUrl: String, query: String, filter: String, outlet: String, limit: Int
+    ): List<SearchResult> {
         val encoded = URLEncoder.encode(query, "UTF-8")
         val url = URL("$baseUrl/search?q=$encoded&filter=$filter")
         val conn = url.openConnection() as HttpURLConnection
         conn.connectTimeout = TIMEOUT_MS
         conn.readTimeout = TIMEOUT_MS
         conn.setRequestProperty("User-Agent", "MusicFinder/1.0")
-
         val json = conn.inputStream.bufferedReader().readText()
         conn.disconnect()
 
@@ -116,36 +119,101 @@ object MusicSearchService {
             if (item.optString("type") !in listOf("stream", "")) continue
 
             val title = item.optString("title").ifBlank { null } ?: continue
-            val uploader = item.optString("uploader").ifBlank { "" }
+            // Piped uses "uploaderName" in search results (not "uploader")
+            val artist = item.optString("uploaderName").ifBlank {
+                item.optString("uploader").ifBlank { "" }
+            }
             val videoPath = item.optString("url").ifBlank { null } ?: continue
-            val videoId = videoPath.substringAfter("v=").substringBefore("&").ifBlank { null }
-            val year = Regex("""\((\d{4})\)""").find(title)?.groupValues?.get(1)
-                ?: Regex("""\b(19|20)\d{2}\b""").find(title)?.value
-
-            val playUrl = "https://www.youtube.com/watch?v=$videoId&autoplay=1"
-                .takeIf { videoId != null }
-                ?: "https://www.youtube.com$videoPath&autoplay=1"
+            val videoId = extractVideoId(videoPath)
+            val year = extractYear(title)
 
             results.add(SearchResult(
                 trackName = cleanTitle(title),
-                artistName = uploader,
+                artistName = artist,
                 year = year,
                 outlet = outlet,
-                playUrl = playUrl,
+                playUrl = buildYouTubeUrl(videoId, videoPath),
                 videoId = videoId
             ))
         }
         return results
     }
 
+    /** Invidious API: more reliable than Piped for general search, returns videoId directly. */
+    private suspend fun queryInvidious(query: String, outlet: String, limit: Int): List<SearchResult> =
+        withContext(Dispatchers.IO) {
+            val jobs = INVIDIOUS_INSTANCES.map { instance ->
+                async {
+                    try {
+                        val encoded = URLEncoder.encode(query, "UTF-8")
+                        val url = URL("$instance/api/v1/search?q=$encoded&type=video&page=1")
+                        val conn = url.openConnection() as HttpURLConnection
+                        conn.connectTimeout = TIMEOUT_MS
+                        conn.readTimeout = TIMEOUT_MS
+                        conn.setRequestProperty("User-Agent", "MusicFinder/1.0")
+                        val json = conn.inputStream.bufferedReader().readText()
+                        conn.disconnect()
+
+                        val items = JSONArray(json)
+                        val results = mutableListOf<SearchResult>()
+                        for (i in 0 until items.length()) {
+                            if (results.size >= limit) break
+                            val item = items.getJSONObject(i)
+                            if (item.optString("type") != "video") continue
+                            val title = item.optString("title").ifBlank { null } ?: continue
+                            val artist = item.optString("author").ifBlank { "" }
+                            val videoId = item.optString("videoId").ifBlank { null } ?: continue
+                            if (notJunk(title, artist).not()) continue
+
+                            val published = item.optLong("published")
+                            val year = if (published > 0)
+                                Calendar.getInstance().apply { timeInMillis = published * 1000 }
+                                    .get(Calendar.YEAR).toString()
+                            else extractYear(title)
+
+                            results.add(SearchResult(
+                                trackName = cleanTitle(title),
+                                artistName = artist,
+                                year = year,
+                                outlet = outlet,
+                                playUrl = "https://www.youtube.com/watch?v=$videoId&autoplay=1",
+                                videoId = videoId
+                            ))
+                        }
+                        results
+                    } catch (_: Exception) { emptyList() }
+                }
+            }
+            jobs.awaitAll().firstOrNull { it.isNotEmpty() } ?: emptyList()
+        }
+
+    private fun notJunk(result: SearchResult) = notJunk(result.trackName, result.artistName)
+    private fun notJunk(title: String, artist: String): Boolean {
+        val combined = "$title $artist".lowercase()
+        return JUNK_KEYWORDS.none { it in combined }
+    }
+
     private fun isRelevant(result: SearchResult, query: String): Boolean {
+        if (!notJunk(result)) return false
         val combined = "${result.trackName} ${result.artistName}".lowercase()
-        if (JUNK_KEYWORDS.any { it in combined }) return false
         val queryWords = query.lowercase().split(Regex("\\s+")).filter { it.length > 2 }
         return queryWords.any { it in combined }
     }
 
-    /** Strips YouTube noise from titles: "(Official Video)", "[HQ]", "4K", etc. */
+    private fun extractVideoId(path: String): String? = when {
+        path.contains("v=") -> path.substringAfter("v=").substringBefore("&").ifBlank { null }
+        path.contains("/watch/") -> path.substringAfterLast("/").ifBlank { null }
+        else -> null
+    }
+
+    private fun buildYouTubeUrl(videoId: String?, fallbackPath: String): String =
+        if (videoId != null) "https://www.youtube.com/watch?v=$videoId&autoplay=1"
+        else "https://www.youtube.com$fallbackPath&autoplay=1"
+
+    private fun extractYear(title: String): String? =
+        Regex("""\((\d{4})\)""").find(title)?.groupValues?.get(1)
+            ?: Regex("""\b(19|20)\d{2}\b""").find(title)?.value
+
     private fun cleanTitle(title: String): String =
         title
             .replace(Regex("""\s*[\(\[](Official|Audio|Video|Lyric|HQ|HD|4K|Remaster|Live|Visualizer|Music Video|Topic|Auto-generated)[^\)\]]*[\)\]]""", RegexOption.IGNORE_CASE), "")
