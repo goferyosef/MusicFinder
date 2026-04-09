@@ -4,6 +4,9 @@ plugins {
     id 'org.jetbrains.kotlin.plugin.parcelize'
 }
 
+def localProps = new Properties()
+rootProject.file("local.properties").withInputStream { localProps.load(it) }
+
 android {
     namespace 'com.musicfinder'
     compileSdk 35
@@ -14,6 +17,7 @@ android {
         targetSdk 35
         versionCode 1
         versionName "1.0"
+        buildConfigField "String", "GEMINI_API_KEY", "\"${localProps.getProperty('gemini.api.key', '')}\""
     }
 
     buildTypes {
@@ -34,6 +38,7 @@ android {
 
     buildFeatures {
         viewBinding true
+        buildConfig true
     }
 }
 

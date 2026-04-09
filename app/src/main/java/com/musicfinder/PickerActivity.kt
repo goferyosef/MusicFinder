@@ -64,14 +64,20 @@ class PickerActivity : AppCompatActivity() {
         // Share path: search with animated loading screen
         val text = intent.getStringExtra(EXTRA_QUERY) ?: run { finish(); return }
 
-        // Detect query early so we can show it in the loading header
-        val mentions = MusicDetector.detect(text)
-        val query = if (mentions.isNotEmpty()) mentions.first().searchQuery
-                    else text.take(150).trim()
-
-        startLoadingAnimation(query)
+        // Show a preliminary header while Gemini resolves the query
+        startLoadingAnimation(text.take(80).trim())
 
         lifecycleScope.launch {
+            // Try Gemini for a precise query; fall back to regex → raw text
+            val geminiQuery = GeminiQueryBuilder.buildQuery(text)
+            val mentions = if (geminiQuery == null) MusicDetector.detect(text) else emptyList()
+            val query = geminiQuery
+                ?: mentions.firstOrNull()?.searchQuery
+                ?: text.take(150).trim()
+
+            // Update header now that we know what we're actually searching for
+            binding.headerText.text = "On it: $query"
+
             val results = MusicSearchService.search(query, packageManager)
             stopLoadingAnimation()
 

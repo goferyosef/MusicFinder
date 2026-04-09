@@ -129,10 +129,13 @@ class CameraActivity : AppCompatActivity() {
     }
 
     private fun autoPlayOrShowSheet(mentions: List<MusicMention>, rawText: String) {
-        val query = if (mentions.isNotEmpty()) mentions.first().searchQuery
-                    else rawText.take(150).trim()
-
         lifecycleScope.launch {
+            // Try Gemini first; fall back to what the OCR regex found, then raw text
+            val geminiQuery = GeminiQueryBuilder.buildQuery(rawText)
+            val query = geminiQuery
+                ?: mentions.firstOrNull()?.searchQuery
+                ?: rawText.take(150).trim()
+
             val results = MusicSearchService.search(query, packageManager)
             when {
                 results.size == 1 -> {
