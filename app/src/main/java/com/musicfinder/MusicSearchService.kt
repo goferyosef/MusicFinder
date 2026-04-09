@@ -36,7 +36,6 @@ object MusicSearchService {
         "meme", "compilation", "funny", "prank", "vlogs", "vlog"
     )
 
-    // Fallback if AppDetector finds nothing (HyperOS strict visibility)
     private val DEFAULT_APPS = listOf(
         MusicApp("com.google.android.youtube", "YouTube", 6)
     )
@@ -66,12 +65,18 @@ object MusicSearchService {
         }
 
     /**
-     * Tries Piped (music_songs → music_videos → videos) then Invidious as fallback.
-     * All instances are queried in parallel so no single slow server delays results.
+     * Search order:
+     *  1. YouTube Data API v3 (official, reliable — requires key in local.properties)
+     *  2. Piped (community proxy, music filters)
+     *  3. Invidious (community proxy, general search)
      */
     private suspend fun searchYouTube(query: String, outlet: String, limit: Int): List<SearchResult> =
         withContext(Dispatchers.IO) {
-            // Piped: music_songs first, then broader filters
+            // 1. Official YouTube Data API — always try first
+            val ytResults = searchYouTubeDataAPI(query, outlet, limit)
+            if (ytResults.isNotEmpty()) return@withContext ytResults
+
+            // 2. Piped (music_songs → music_videos → videos), all instances in parallel
             val pipedFilters = listOf("music_songs", "music_videos", "videos")
             var bestJunkFree = emptyList<SearchResult>()
 
@@ -88,15 +93,58 @@ object MusicSearchService {
                 if (relevant.isNotEmpty()) return@withContext relevant
                 if (nonJunk.isNotEmpty() && bestJunkFree.isEmpty()) bestJunkFree = nonJunk
             }
+            if (bestJunkFree.isNotEmpty()) return@withContext bestJunkFree
 
-            // Piped gave nothing useful — try Invidious
-            if (bestJunkFree.isEmpty()) {
-                val inv = queryInvidious(query, outlet, limit)
-                if (inv.isNotEmpty()) return@withContext inv
-            }
-
-            bestJunkFree
+            // 3. Invidious fallback
+            queryInvidious(query, outlet, limit)
         }
+
+    // ── YouTube Data API v3 ────────────────────────────────────────────────
+
+    private fun searchYouTubeDataAPI(query: String, outlet: String, limit: Int): List<SearchResult> {
+        val apiKey = BuildConfig.YOUTUBE_API_KEY
+        if (apiKey.isBlank() || apiKey == "PASTE_YOUR_YOUTUBE_KEY_HERE") return emptyList()
+        return try {
+            val encoded = URLEncoder.encode(query, "UTF-8")
+            // videoCategoryId=10 = Music
+            val url = URL(
+                "https://www.googleapis.com/youtube/v3/search" +
+                "?key=$apiKey&q=$encoded&part=snippet&type=video" +
+                "&videoCategoryId=10&maxResults=$limit&safeSearch=none"
+            )
+            val conn = url.openConnection() as HttpURLConnection
+            conn.connectTimeout = TIMEOUT_MS
+            conn.readTimeout = TIMEOUT_MS
+            conn.setRequestProperty("User-Agent", "MusicFinder/1.0")
+            val json = conn.inputStream.bufferedReader().readText()
+            conn.disconnect()
+
+            val items = JSONObject(json).getJSONArray("items")
+            val results = mutableListOf<SearchResult>()
+            for (i in 0 until items.length()) {
+                if (results.size >= limit) break
+                val item = items.getJSONObject(i)
+                val videoId = item.getJSONObject("id").optString("videoId").ifBlank { null } ?: continue
+                val snippet = item.getJSONObject("snippet")
+                val title = snippet.optString("title").ifBlank { null } ?: continue
+                val artist = snippet.optString("channelTitle").ifBlank { "" }
+                if (!notJunk(title, artist)) continue
+                val year = Regex("""^(\d{4})""").find(snippet.optString("publishedAt"))?.value
+
+                results.add(SearchResult(
+                    trackName = cleanTitle(title),
+                    artistName = artist,
+                    year = year,
+                    outlet = outlet,
+                    playUrl = "https://www.youtube.com/watch?v=$videoId&autoplay=1",
+                    videoId = videoId
+                ))
+            }
+            results
+        } catch (_: Exception) { emptyList() }
+    }
+
+    // ── Piped ──────────────────────────────────────────────────────────────
 
     private fun queryPiped(
         baseUrl: String, query: String, filter: String, outlet: String, limit: Int
@@ -112,25 +160,19 @@ object MusicSearchService {
 
         val items = JSONObject(json).getJSONArray("items")
         val results = mutableListOf<SearchResult>()
-
         for (i in 0 until items.length()) {
             if (results.size >= limit) break
             val item = items.getJSONObject(i)
             if (item.optString("type") !in listOf("stream", "")) continue
-
             val title = item.optString("title").ifBlank { null } ?: continue
-            // Piped uses "uploaderName" in search results (not "uploader")
-            val artist = item.optString("uploaderName").ifBlank {
-                item.optString("uploader").ifBlank { "" }
-            }
+            val artist = item.optString("uploaderName").ifBlank { item.optString("uploader") }
             val videoPath = item.optString("url").ifBlank { null } ?: continue
             val videoId = extractVideoId(videoPath)
-            val year = extractYear(title)
 
             results.add(SearchResult(
                 trackName = cleanTitle(title),
                 artistName = artist,
-                year = year,
+                year = extractYear(title),
                 outlet = outlet,
                 playUrl = buildYouTubeUrl(videoId, videoPath),
                 videoId = videoId
@@ -139,7 +181,8 @@ object MusicSearchService {
         return results
     }
 
-    /** Invidious API: more reliable than Piped for general search, returns videoId directly. */
+    // ── Invidious ──────────────────────────────────────────────────────────
+
     private suspend fun queryInvidious(query: String, outlet: String, limit: Int): List<SearchResult> =
         withContext(Dispatchers.IO) {
             val jobs = INVIDIOUS_INSTANCES.map { instance ->
@@ -163,7 +206,7 @@ object MusicSearchService {
                             val title = item.optString("title").ifBlank { null } ?: continue
                             val artist = item.optString("author").ifBlank { "" }
                             val videoId = item.optString("videoId").ifBlank { null } ?: continue
-                            if (notJunk(title, artist).not()) continue
+                            if (!notJunk(title, artist)) continue
 
                             val published = item.optLong("published")
                             val year = if (published > 0)
@@ -186,6 +229,8 @@ object MusicSearchService {
             }
             jobs.awaitAll().firstOrNull { it.isNotEmpty() } ?: emptyList()
         }
+
+    // ── Helpers ────────────────────────────────────────────────────────────
 
     private fun notJunk(result: SearchResult) = notJunk(result.trackName, result.artistName)
     private fun notJunk(title: String, artist: String): Boolean {
