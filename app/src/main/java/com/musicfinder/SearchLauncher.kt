@@ -24,12 +24,21 @@ object SearchLauncher {
     fun searchOnYouTube(context: Context, query: String) =
         openUrl(context, "https://www.youtube.com/results?search_query=${Uri.encode(query)}")
 
-    // --- YouTube / YouTube Music: always open in Brave ---
-    private fun playYouTube(context: Context, result: SearchResult) =
-        openUrl(context, result.playUrl)
+    // --- YouTube / YouTube Music: in-app WebView player (autoplay with sound) ---
+    // Falls back to Brave only for vague/search URLs that have no video ID.
+    private fun playYouTube(context: Context, result: SearchResult) {
+        if (result.videoId != null) {
+            context.startActivity(
+                Intent(context, PlayerActivity::class.java)
+                    .putExtra(PlayerActivity.EXTRA_VIDEO_ID, result.videoId)
+            )
+        } else {
+            openUrl(context, result.playUrl)
+        }
+    }
 
     private fun playYouTubeMusic(context: Context, result: SearchResult) =
-        openUrl(context, result.playUrl)
+        playYouTube(context, result)
 
     // --- Spotify: deep-link opens app and searches ---
     private fun playSpotify(context: Context, result: SearchResult) {

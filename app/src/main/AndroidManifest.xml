@@ -62,6 +62,12 @@
             android:exported="false"
             android:theme="@style/Theme.MusicFinder.Dialog" />
 
+        <!-- In-app YouTube player — autoplay with sound, no browser needed -->
+        <activity
+            android:name=".PlayerActivity"
+            android:exported="false"
+            android:hardwareAccelerated="true" />
+
     </application>
 
 </manifest>
