@@ -62,7 +62,8 @@ class PickerActivity : AppCompatActivity() {
         }
 
         // Share path: search with animated loading screen
-        val text = intent.getStringExtra(EXTRA_QUERY) ?: run { finish(); return }
+        val rawText = intent.getStringExtra(EXTRA_QUERY) ?: run { finish(); return }
+        val text = TextCleaner.clean(rawText)
 
         // Show a preliminary header while Gemini resolves the query
         startLoadingAnimation(text.take(80).trim())
@@ -88,10 +89,17 @@ class PickerActivity : AppCompatActivity() {
                 // Nothing from live search → show detected mentions as vague
                 mentions.isNotEmpty() -> showResults(MusicSearchService.mentionsToVague(mentions))
 
-                // Absolute fallback
+                // Absolute fallback — show a single tappable YouTube search result
                 else -> {
-                    SearchLauncher.searchOnYouTube(this@PickerActivity, query)
-                    finish()
+                    val encoded = java.net.URLEncoder.encode(query, "UTF-8")
+                    showResults(listOf(SearchResult(
+                        trackName = query,
+                        artistName = "Search on YouTube",
+                        year = null,
+                        outlet = "YouTube",
+                        playUrl = "https://www.youtube.com/results?search_query=$encoded",
+                        isVague = true
+                    )))
                 }
             }
         }

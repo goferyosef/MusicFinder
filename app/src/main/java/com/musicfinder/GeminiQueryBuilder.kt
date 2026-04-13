@@ -24,17 +24,19 @@ object GeminiQueryBuilder {
 
         try {
             val prompt = """
-                Identify the song or musical piece mentioned in this text.
+                The text below may be a book passage, a webpage excerpt, or a messy selection containing URLs, HTML, or navigation text. Your job: find any song, piece of music, or musical work mentioned in it.
+
                 Reply in this EXACT format, nothing else:
-                TITLE: <title>
+                TITLE: <song or piece title>
                 ARTIST: <composer or performer, or UNKNOWN>
-                QUERY: <best YouTube search query to find this piece>
+                QUERY: <best YouTube search query — title + artist, concise>
 
-                If no music is mentioned, reply exactly: NONE
+                Rules:
+                - Ignore URLs, HTML tags, and navigation text entirely.
+                - If only an artist name appears with no specific song, reply NONE.
+                - If no music is mentioned at all, reply exactly: NONE
 
-                Text: """
-                ${text.take(500)}
-                """
+                Text: ${text.take(500)}
             """.trimIndent()
 
             val body = JSONObject().apply {
